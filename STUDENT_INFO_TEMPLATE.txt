@@ -1,0 +1,17 @@
+# Sample Student Information File
+# This file should be named: studentinfo.xlsx
+# Column A: Student ID
+# Columns B-J: Other student info (optional)
+# Column K: RFID
+
+# Example structure:
+# A          | B      | C      | D        | E    | F | G | H | I | J | K
+# StudentID  | FName  | LName  | Email    | Year |   |   |   |   |   | RFID
+# S001       | John   | Doe    | john@... | 1    |   |   |   |   |   | 1234567890
+# S002       | Jane   | Smith  | jane@... | 2    |   |   |   |   |   | 0987654321
+
+Instructions:
+1. Create an Excel file named 'studentinfo.xlsx'
+2. Put Student IDs in Column A
+3. Put RFID numbers in Column K
+4. Run the application and it will read from this file automatically
