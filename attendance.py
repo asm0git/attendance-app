@@ -20,8 +20,9 @@ class StudentRegistry:
     def load_students(self):
         """Load student data from Excel file into memory for fast lookup."""
         try:
+            # Check if file exists in current directory
             if not os.path.exists(self.filename):
-                return False, f"Error: {self.filename} not found!"
+                return False, f"File not found: {self.filename}\nCurrent directory: {os.getcwd()}"
             
             wb = openpyxl.load_workbook(self.filename)
             ws = wb.active
@@ -263,6 +264,7 @@ class AttendanceUI:
         style.configure('Error.TLabel', font=('Helvetica', 12, 'bold'), foreground='#dc3545', background='#f0f0f0')
         style.configure('Warning.TLabel', font=('Helvetica', 12, 'bold'), foreground='#ff9800', background='#f0f0f0')
         style.configure('Info.TLabel', font=('Helvetica', 10), background='#f0f0f0', foreground='#666')
+        style.configure('Debug.TLabel', font=('Courier', 9), background='#f0f0f0', foreground='#999')
         
         style.configure('Action.TButton', font=('Helvetica', 12, 'bold'), padding=10)
         style.configure('TEntry', font=('Helvetica', 11), padding=5)
@@ -289,9 +291,24 @@ class AttendanceUI:
         status = ttk.Label(main_frame, text=f"✓ {status_msg}" if status_ok else f"✗ {status_msg}", style=status_color)
         status.pack(pady=10)
         
+        # Debug info - current working directory
+        debug_info = ttk.Label(main_frame, text=f"Working directory: {os.getcwd()}", style='Debug.TLabel')
+        debug_info.pack(pady=5)
+        
         # Button frame
         btn_frame = ttk.Frame(main_frame)
         btn_frame.pack(pady=40)
+        
+        # Browse button if student file not found
+        if not status_ok:
+            btn_browse = ttk.Button(
+                btn_frame, 
+                text="📁 BROWSE FOR STUDENTINFO.XLSX", 
+                command=self.browse_student_file,
+                style='Action.TButton',
+                width=30
+            )
+            btn_browse.pack(pady=10)
         
         btn_new = ttk.Button(
             btn_frame, 
@@ -320,8 +337,36 @@ class AttendanceUI:
         )
         btn_quit.pack(pady=10)
     
+    def browse_student_file(self):
+        """Browse for studentinfo.xlsx file."""
+        file_path = filedialog.askopenfilename(
+            title="Select studentinfo.xlsx",
+            filetypes=[("Excel files", "*.xlsx"), ("All files", "*.*")]
+        )
+        
+        if file_path:
+            # Copy the file to current directory with standard name
+            try:
+                import shutil
+                dest_path = os.path.join(os.getcwd(), 'studentinfo.xlsx')
+                shutil.copy(file_path, dest_path)
+                self.student_registry.filename = dest_path
+                status_ok, status_msg = self.student_registry.load_students()
+                if status_ok:
+                    messagebox.showinfo("Success", f"✓ File loaded successfully!\n{status_msg}")
+                    self.show_menu()
+                else:
+                    messagebox.showerror("Error", status_msg)
+            except Exception as e:
+                messagebox.showerror("Error", f"Failed to copy file: {e}")
+    
     def show_create_sheet(self):
         """Show form to create new attendance sheet."""
+        # Check if student file is loaded
+        if not self.student_registry.student_cache:
+            messagebox.showerror("Error", "Please load studentinfo.xlsx first!")
+            return
+        
         self.clear_window()
         
         main_frame = ttk.Frame(self.root)
