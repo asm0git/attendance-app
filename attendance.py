@@ -14,7 +14,7 @@ class StudentRegistry:
         self.filename = filename
         self.student_cache = {}  # {student_id: rfid}
         self.rfid_cache = {}     # {rfid: student_id}
-        self.student_names = {}  # {student_id: name} for display
+        self.student_names = {}  # {student_id: full_name} for display
         self.student_departments = {}  # {student_id: department}
         self.load_students()
     
@@ -28,18 +28,31 @@ class StudentRegistry:
             wb = openpyxl.load_workbook(self.filename)
             ws = wb.active
             
-            # Column A = Student ID, Column B = Name, Column C = Department, Column K = RFID
+            # Column A = Student ID, Column B = Last Name, Column C = First Name, 
+            # Column D = Middle Name, Column H = Department, Column K = RFID
             for row in ws.iter_rows(min_row=2, values_only=True):
                 student_id = row[0]  # Column A
-                name = row[1] if row[1] else ""  # Column B (Name)
-                department = row[2] if row[2] else ""  # Column C (Department)
+                last_name = row[1] if row[1] else ""  # Column B
+                first_name = row[2] if row[2] else ""  # Column C
+                middle_name = row[3] if row[3] else ""  # Column D
+                department = row[7]  # Column H
                 rfid = row[10]       # Column K
                 
                 if student_id and rfid:
+                    # Build full name
+                    name_parts = []
+                    if first_name:
+                        name_parts.append(first_name)
+                    if middle_name:
+                        name_parts.append(middle_name)
+                    if last_name:
+                        name_parts.append(last_name)
+                    full_name = " ".join(name_parts)
+                    
                     self.student_cache[str(student_id).strip()] = str(rfid).strip()
                     self.rfid_cache[str(rfid).strip()] = str(student_id).strip()
-                    self.student_names[str(student_id).strip()] = str(name).strip()
-                    self.student_departments[str(student_id).strip()] = str(department).strip()
+                    self.student_names[str(student_id).strip()] = full_name.strip()
+                    self.student_departments[str(student_id).strip()] = str(department).strip() if department else ""
             
             return True, f"Loaded {len(self.student_cache)} students"
         except Exception as e:
