@@ -15,6 +15,7 @@ class StudentRegistry:
         self.student_cache = {}  # {student_id: rfid}
         self.rfid_cache = {}     # {rfid: student_id}
         self.student_names = {}  # {student_id: name} for display
+        self.student_departments = {}  # {student_id: department}
         self.load_students()
     
     def load_students(self):
@@ -27,16 +28,18 @@ class StudentRegistry:
             wb = openpyxl.load_workbook(self.filename)
             ws = wb.active
             
-            # Column A = Student ID, Column K = RFID, Column B = Name (optional)
+            # Column A = Student ID, Column B = Name, Column C = Department, Column K = RFID
             for row in ws.iter_rows(min_row=2, values_only=True):
                 student_id = row[0]  # Column A
-                name = row[1] if row[1] else ""  # Column B (optional)
+                name = row[1] if row[1] else ""  # Column B (Name)
+                department = row[2] if row[2] else ""  # Column C (Department)
                 rfid = row[10]       # Column K
                 
                 if student_id and rfid:
                     self.student_cache[str(student_id).strip()] = str(rfid).strip()
                     self.rfid_cache[str(rfid).strip()] = str(student_id).strip()
                     self.student_names[str(student_id).strip()] = str(name).strip()
+                    self.student_departments[str(student_id).strip()] = str(department).strip()
             
             return True, f"Loaded {len(self.student_cache)} students"
         except Exception as e:
@@ -53,6 +56,16 @@ class StudentRegistry:
     def get_student_name(self, student_id):
         """Get student name if available."""
         return self.student_names.get(str(student_id).strip(), "")
+    
+    def get_student_department(self, student_id):
+        """Get student department if available."""
+        return self.student_departments.get(str(student_id).strip(), "")
+    
+    def get_student_info(self, student_id):
+        """Get full student info (name, department)."""
+        name = self.get_student_name(student_id)
+        dept = self.get_student_department(student_id)
+        return name, dept
     
     def is_valid_student(self, identifier):
         """Check if identifier (student ID or RFID) exists."""
@@ -88,10 +101,10 @@ class AttendanceSheet:
         self.venue = venue
         self.start_time = start_time
         self.end_time = end_time
-        self.records = OrderedDict()  # {input_id: (timestamp, rfid, student_id, status)} 
+        self.records = OrderedDict()  # {student_id: (timestamp, rfid, name, department, status)} 
         self.all_inputs = []  # All inputs for logging, including unknowns
     
-    def add_record(self, input_id, rfid, student_id, status):
+    def add_record(self, input_id, rfid, student_id, status, name="", department=""):
         """
         Add an attendance record (saves ALL inputs regardless of validity).
         status: "FOUND_BY_RFID", "FOUND_BY_ID", or "UNKNOWN"
@@ -104,13 +117,15 @@ class AttendanceSheet:
             'input': input_id,
             'rfid': rfid,
             'student_id': student_id,
+            'name': name,
+            'department': department,
             'status': status
         })
         
         # Only add to primary records if valid student
         if status != "UNKNOWN":
             if student_id not in self.records:
-                self.records[student_id] = (timestamp, rfid, student_id, status)
+                self.records[student_id] = (timestamp, rfid, name, department, status)
                 return timestamp, True, "Valid"
             return self.records[student_id][0], False, "Duplicate"
         else:
@@ -141,26 +156,32 @@ class AttendanceSheet:
             ws_attendance[f'A{header_row}'] = "Time Scanned"
             ws_attendance[f'B{header_row}'] = "RFID"
             ws_attendance[f'C{header_row}'] = "Student ID"
+            ws_attendance[f'D{header_row}'] = "Name"
+            ws_attendance[f'E{header_row}'] = "Department"
             
             # Style headers
             header_fill = PatternFill(start_color="4472C4", end_color="4472C4", fill_type="solid")
             header_font = Font(bold=True, color="FFFFFF")
-            for col in ['A', 'B', 'C']:
+            for col in ['A', 'B', 'C', 'D', 'E']:
                 ws_attendance[f'{col}{header_row}'].fill = header_fill
                 ws_attendance[f'{col}{header_row}'].font = header_font
                 ws_attendance[f'{col}{header_row}'].alignment = Alignment(horizontal="center")
             
             # Add valid records
-            for idx, (student_id, (timestamp, rfid, _, _)) in enumerate(self.records.items(), start=1):
+            for idx, (student_id, (timestamp, rfid, name, department, _)) in enumerate(self.records.items(), start=1):
                 row = header_row + idx
                 ws_attendance[f'A{row}'] = timestamp
                 ws_attendance[f'B{row}'] = rfid
                 ws_attendance[f'C{row}'] = student_id
+                ws_attendance[f'D{row}'] = name
+                ws_attendance[f'E{row}'] = department
             
             # Adjust column widths
             ws_attendance.column_dimensions['A'].width = 20
             ws_attendance.column_dimensions['B'].width = 25
             ws_attendance.column_dimensions['C'].width = 15
+            ws_attendance.column_dimensions['D'].width = 25
+            ws_attendance.column_dimensions['E'].width = 20
             
             # ===== SHEET 2: Complete Log (All inputs) =====
             ws_log = wb.create_sheet("Complete Log")
@@ -170,12 +191,14 @@ class AttendanceSheet:
             ws_log[f'B{log_header_row}'] = "Input Scanned"
             ws_log[f'C{log_header_row}'] = "RFID"
             ws_log[f'D{log_header_row}'] = "Student ID"
-            ws_log[f'E{log_header_row}'] = "Status"
+            ws_log[f'E{log_header_row}'] = "Name"
+            ws_log[f'F{log_header_row}'] = "Department"
+            ws_log[f'G{log_header_row}'] = "Status"
             
             # Style log headers
             log_fill = PatternFill(start_color="70AD47", end_color="70AD47", fill_type="solid")
             log_font = Font(bold=True, color="FFFFFF")
-            for col in ['A', 'B', 'C', 'D', 'E']:
+            for col in ['A', 'B', 'C', 'D', 'E', 'F', 'G']:
                 ws_log[f'{col}{log_header_row}'].fill = log_fill
                 ws_log[f'{col}{log_header_row}'].font = log_font
                 ws_log[f'{col}{log_header_row}'].alignment = Alignment(horizontal="center")
@@ -187,22 +210,26 @@ class AttendanceSheet:
                 ws_log[f'B{row}'] = log_entry['input']
                 ws_log[f'C{row}'] = log_entry['rfid']
                 ws_log[f'D{row}'] = log_entry['student_id']
-                ws_log[f'E{row}'] = log_entry['status']
+                ws_log[f'E{row}'] = log_entry['name']
+                ws_log[f'F{row}'] = log_entry['department']
+                ws_log[f'G{row}'] = log_entry['status']
                 
                 # Color code status
                 if log_entry['status'] == "UNKNOWN":
-                    ws_log[f'E{row}'].fill = PatternFill(start_color="FFC7CE", end_color="FFC7CE", fill_type="solid")
+                    ws_log[f'G{row}'].fill = PatternFill(start_color="FFC7CE", end_color="FFC7CE", fill_type="solid")
                 elif log_entry['status'] == "FOUND_BY_RFID":
-                    ws_log[f'E{row}'].fill = PatternFill(start_color="C6EFCE", end_color="C6EFCE", fill_type="solid")
+                    ws_log[f'G{row}'].fill = PatternFill(start_color="C6EFCE", end_color="C6EFCE", fill_type="solid")
                 else:
-                    ws_log[f'E{row}'].fill = PatternFill(start_color="C6EFCE", end_color="C6EFCE", fill_type="solid")
+                    ws_log[f'G{row}'].fill = PatternFill(start_color="C6EFCE", end_color="C6EFCE", fill_type="solid")
             
             # Adjust log column widths
             ws_log.column_dimensions['A'].width = 20
             ws_log.column_dimensions['B'].width = 20
             ws_log.column_dimensions['C'].width = 25
             ws_log.column_dimensions['D'].width = 15
-            ws_log.column_dimensions['E'].width = 15
+            ws_log.column_dimensions['E'].width = 25
+            ws_log.column_dimensions['F'].width = 20
+            ws_log.column_dimensions['G'].width = 15
             
             # ===== SHEET 3: Summary =====
             ws_summary = wb.create_sheet("Summary", 0)
@@ -241,7 +268,7 @@ class AttendanceUI:
     def __init__(self, root):
         self.root = root
         self.root.title("Attendance System - RFID Scanner")
-        self.root.geometry("1000x700")
+        self.root.geometry("1100x750")
         self.root.configure(bg='#f0f0f0')
         
         self.student_registry = StudentRegistry()
@@ -265,6 +292,7 @@ class AttendanceUI:
         style.configure('Warning.TLabel', font=('Helvetica', 12, 'bold'), foreground='#ff9800', background='#f0f0f0')
         style.configure('Info.TLabel', font=('Helvetica', 10), background='#f0f0f0', foreground='#666')
         style.configure('Debug.TLabel', font=('Courier', 9), background='#f0f0f0', foreground='#999')
+        style.configure('StudentInfo.TLabel', font=('Helvetica', 11, 'bold'), background='#f0f0f0', foreground='#1a5490')
         
         style.configure('Action.TButton', font=('Helvetica', 12, 'bold'), padding=10)
         style.configure('TEntry', font=('Helvetica', 11), padding=5)
@@ -447,7 +475,9 @@ class AttendanceUI:
                 ws_att = wb['Attendance']
                 for row in ws_att.iter_rows(min_row=11, values_only=True):
                     if row[0] and row[1] and row[2]:  # timestamp, rfid, student_id
-                        self.current_sheet.records[row[2]] = (row[0], row[1], row[2], "FOUND_BY_ID")
+                        name = row[3] if row[3] else ""
+                        dept = row[4] if row[4] else ""
+                        self.current_sheet.records[row[2]] = (row[0], row[1], name, dept, "FOUND_BY_ID")
             
             # Load all log entries
             if 'Complete Log' in wb.sheetnames:
@@ -459,7 +489,9 @@ class AttendanceUI:
                             'input': row[1],
                             'rfid': row[2],
                             'student_id': row[3],
-                            'status': row[4]
+                            'name': row[4] if row[4] else "",
+                            'department': row[5] if row[5] else "",
+                            'status': row[6]
                         })
             
             self.show_scanning_interface()
@@ -549,6 +581,16 @@ class AttendanceUI:
         self.status_label = ttk.Label(main_frame, text="Ready to scan...", style='Info.TLabel')
         self.status_label.pack(pady=5)
         
+        # Student info display
+        info_frame = ttk.Frame(main_frame)
+        info_frame.pack(fill=tk.X, pady=5, padx=10)
+        
+        self.student_name_label = ttk.Label(info_frame, text="", style='StudentInfo.TLabel')
+        self.student_name_label.pack(anchor=tk.W)
+        
+        self.student_dept_label = ttk.Label(info_frame, text="", style='StudentInfo.TLabel')
+        self.student_dept_label.pack(anchor=tk.W)
+        
         # Scanned list with scrollbar
         list_frame = ttk.LabelFrame(main_frame, text=f"Scanned: {len(self.current_sheet.records)} Valid | {len(self.current_sheet.all_inputs)} Total", padding=5)
         list_frame.pack(fill=tk.BOTH, expand=True, pady=10, padx=10)
@@ -556,7 +598,7 @@ class AttendanceUI:
         scrollbar = ttk.Scrollbar(list_frame)
         scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
         
-        self.scan_listbox = tk.Listbox(list_frame, yscrollcommand=scrollbar.set, font=('Courier', 9), height=15)
+        self.scan_listbox = tk.Listbox(list_frame, yscrollcommand=scrollbar.set, font=('Courier', 8), height=15)
         self.scan_listbox.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
         scrollbar.config(command=self.scan_listbox.yview)
         
@@ -590,20 +632,31 @@ class AttendanceUI:
         # Lookup student (returns even if UNKNOWN)
         student_id, rfid, status = self.student_registry.lookup_student(identifier)
         
+        # Get student info (name, department)
+        name, department = self.student_registry.get_student_info(student_id)
+        
         # Add record (ALWAYS saves regardless of validity)
-        timestamp, is_new, message = self.current_sheet.add_record(identifier, rfid, student_id, status)
+        timestamp, is_new, message = self.current_sheet.add_record(identifier, rfid, student_id, status, name, department)
         
         # Update UI based on result
         if status == "UNKNOWN":
             self.status_label.config(text=f"⚠ UNKNOWN ID: {identifier} (Logged)", style='Warning.TLabel')
+            self.student_name_label.config(text="")
+            self.student_dept_label.config(text="")
             self.scan_input.config(foreground='orange')
         elif is_new:
-            student_name = self.student_registry.get_student_name(student_id)
-            name_display = f" ({student_name})" if student_name else ""
-            self.status_label.config(text=f"✓ {student_id}{name_display} - {timestamp}", style='Success.TLabel')
+            name_display = f"📝 {name}" if name else "📝 (No name on file)"
+            dept_display = f"🏢 {department}" if department else "🏢 (No department on file)"
+            self.status_label.config(text=f"✓ {student_id} - {timestamp}", style='Success.TLabel')
+            self.student_name_label.config(text=name_display)
+            self.student_dept_label.config(text=dept_display)
             self.scan_input.config(foreground='green')
         else:
+            name_display = f"📝 {name}" if name else "📝 (No name on file)"
+            dept_display = f"🏢 {department}" if department else "🏢 (No department on file)"
             self.status_label.config(text=f"⚠ DUPLICATE: {student_id} (Logged)", style='Warning.TLabel')
+            self.student_name_label.config(text=name_display)
+            self.student_dept_label.config(text=dept_display)
             self.scan_input.config(foreground='orange')
         
         self.populate_scan_list()
@@ -615,12 +668,12 @@ class AttendanceUI:
         valid_count = len(self.current_sheet.records)
         total_count = len(self.current_sheet.all_inputs)
         
-        self.scan_listbox.insert(tk.END, f"{'#':<3} {'Student ID':<15} {'RFID':<25} {'Timestamp':<20} {'Status':<10}")
-        self.scan_listbox.insert(tk.END, "-" * 75)
+        self.scan_listbox.insert(tk.END, f"{'#':<3} {'Student ID':<12} {'Name':<20} {'Department':<18} {'Status':<10}")
+        self.scan_listbox.insert(tk.END, "-" * 70)
         
         for idx, log_entry in enumerate(self.current_sheet.all_inputs, 1):
             status_icon = "✓" if log_entry['status'] != "UNKNOWN" else "✗"
-            display = f"{idx:<3} {log_entry['student_id']:<15} {log_entry['rfid']:<25} {log_entry['timestamp']:<20} {status_icon} {log_entry['status']}"
+            display = f"{idx:<3} {log_entry['student_id']:<12} {log_entry['name']:<20} {log_entry['department']:<18} {status_icon} {log_entry['status']}"
             self.scan_listbox.insert(tk.END, display)
         
         # Scroll to bottom
@@ -633,6 +686,8 @@ class AttendanceUI:
             self.current_sheet.all_inputs.clear()
             self.populate_scan_list()
             self.status_label.config(text="Records cleared", style='Info.TLabel')
+            self.student_name_label.config(text="")
+            self.student_dept_label.config(text="")
     
     def finish_scanning(self):
         """Save attendance and return to menu."""
