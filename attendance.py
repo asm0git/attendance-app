@@ -653,10 +653,13 @@ class AttendanceUI:
         
         # Update UI based on result
         if status == "UNKNOWN":
-            self.status_label.config(text=f"⚠ UNKNOWN ID: {identifier} (Logged)", style='Warning.TLabel')
-            self.student_name_label.config(text="")
-            self.student_dept_label.config(text="")
-            self.scan_input.config(foreground='orange')
+            self.status_label.config(
+                text=f"✓ Attendance Logged - {identifier}",
+                style='Success.TLabel'
+            )
+            self.student_name_label.config(text="📝 Unknown Student")
+            self.student_dept_label.config(text="🏢 Not in student database")
+            self.scan_input.config(foreground='green')
         elif is_new:
             name_display = f"📝 {name}" if name else "📝 (No name on file)"
             dept_display = f"🏢 {department}" if department else "🏢 (No department on file)"
@@ -681,12 +684,31 @@ class AttendanceUI:
         valid_count = len(self.current_sheet.records)
         total_count = len(self.current_sheet.all_inputs)
         
-        self.scan_listbox.insert(tk.END, f"{'#':<3} {'Student ID':<12} {'Name':<20} {'Department':<18} {'Status':<10}")
+        self.scan_listbox.insert(
+    tk.END,
+    f"{'#':<3} {'Student ID':<12} {'Name':<25} {'Department':<18} {'Result'}"
+)
         self.scan_listbox.insert(tk.END, "-" * 70)
         
         for idx, log_entry in enumerate(self.current_sheet.all_inputs, 1):
-            status_icon = "✓" if log_entry['status'] != "UNKNOWN" else "✗"
-            display = f"{idx:<3} {log_entry['student_id']:<12} {log_entry['name']:<20} {log_entry['department']:<18} {status_icon} {log_entry['status']}"
+            # Display friendly information to the operator
+            if log_entry['status'] == "UNKNOWN":
+                display_name = "Attendance Logged"
+                display_dept = "-"
+                display_status = "✓ Logged"
+            else:
+                display_name = log_entry['name'] if log_entry['name'] else "Attendance Logged"
+                display_dept = log_entry['department'] if log_entry['department'] else "-"
+                display_status = "✓ Logged"
+
+            display = (
+                f"{idx:<3} "
+                f"{log_entry['student_id']:<12} "
+                f"{display_name:<25} "
+                f"{display_dept:<18} "
+                f"{display_status}"
+            )
+
             self.scan_listbox.insert(tk.END, display)
         
         # Scroll to bottom
