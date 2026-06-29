@@ -100,7 +100,7 @@ class StudentRegistry:
             return identifier, rfid, "FOUND_BY_ID"
         
         # Not found - return as-is with UNKNOWN status
-        return identifier, identifier, "UNKNOWN"
+        return "", identifier, "UNKNOWN"
 
 
 class AttendanceSheet:
